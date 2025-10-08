@@ -20,6 +20,14 @@ class GameScene extends Phaser.Scene {
 
     private readonly fruitTypes = ["apple", "banana", "cherries"];
 
+    private lives: number = 3;
+    private lifeIcons: Phaser.GameObjects.Image[] = [];
+
+    private highScore: number = 0;
+    private gameOverText!: Phaser.GameObjects.Text;
+
+    private spawnTimer!: Phaser.Time.TimerEvent;
+
     constructor() {
         super("GameScene");
         this.config = {
@@ -33,9 +41,14 @@ class GameScene extends Phaser.Scene {
         this.load.image("banana", "/assets/banana.png");
         this.load.image("cherries", "/assets/cherries.png");
         this.load.image("wicker-basket", "/assets/wicker-basket.png");
+        this.load.image("heart", "/assets/heart.png");
     }
 
     create() {
+        this.lives = 3;
+        this.score = 0;
+        this.lifeIcons = [];
+        
         this.physics.world.setBounds(0, 0, 800, 600);
         this.fruits = this.physics.add.group({
             classType: Fruit,
@@ -61,7 +74,7 @@ class GameScene extends Phaser.Scene {
             undefined,
             this);
 
-        this.time.addEvent({
+        this.spawnTimer = this.time.addEvent({
             delay: this.config.spawnRate,
             callback: () => this.spawnFruit(),
             loop: true,
@@ -73,9 +86,25 @@ class GameScene extends Phaser.Scene {
             font: "24px Arial",
             color: "#ffffff",
         }).setDepth(1);
+
+        for (let i = 0; i < this.lives; i++) {
+            const heart = this.add.image(700 + i * 40, 30, "heart").setScale(0.05);
+            this.lifeIcons.push(heart);
+        }
+
+        this.gameOverText = this.add.text(400, 300, "", {
+            font: "32px Arial",
+            color: "#fff",
+            backgroundColor: "#000000",
+            padding: { x: 20, y: 20 },
+            align: "center"
+        }).setOrigin(0.5).setDepth(2).setVisible(false);
     }
 
     update(time: number, delta: number) {
+        if (this.lives <= 0) {
+            return;
+        };
 
         const keys = this.input.keyboard?.addKeys({ A: Phaser.Input.Keyboard.KeyCodes.A, D: Phaser.Input.Keyboard.KeyCodes.D }) as any;
         const moveAmount = this.speed * (delta / 1000);
@@ -89,10 +118,11 @@ class GameScene extends Phaser.Scene {
 
         this.fruits.getChildren().forEach((fruitObj) => {
             const fruit = fruitObj as Fruit;
-            if (fruit.active && fruit.body) {
+            if (fruit.active && fruit.body && fruit.collectable) {
                 const bottomY = this.physics.world.bounds.bottom;
                 if (fruit.y + fruit.displayHeight / 2 >= bottomY) {
                     fruit.collectable = false;
+                    this.loseLife();
                 }
             }
         });
@@ -119,6 +149,35 @@ class GameScene extends Phaser.Scene {
             this.score += 1;
             this.scoreText.setText(`Score: ${this.score}`);
         }
+    }
+
+    loseLife() {
+        if (this.lives > 0) {
+            this.lives -= 1;
+            const heart = this.lifeIcons.pop();
+            heart?.destroy();
+        }
+
+        if (this.lives <= 0) {
+            this.gameOver();
+        }
+    }
+
+    gameOver() {
+        if (this.score > this.highScore) {
+            this.highScore = this.score;
+        }
+
+        this.physics.pause();
+        this.time.paused == true;
+        this.spawnTimer.remove(false);
+
+        this.gameOverText.setText(`Game Over\nScore: ${this.score}\nHigh Score: ${this.highScore}\n\nPress any key to restart`)
+        this.gameOverText.setVisible(true);
+
+        this.input.keyboard?.once("keydown", () => {
+            this.scene.start("MainMenuScene");
+        });
     }
 }
 
